@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>肆季文创直播间幸运转盘</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 16px; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #f5f3ef;
+    color: #333;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: 4vw 4vw 8vw;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .hidden { display: none !important; }
+  h1 { font-size: 1.25rem; margin-bottom: .5rem; text-align: center; }
+  .product { font-size: .85rem; color: #777; margin-bottom: 1rem; text-align: center; }
+  .product b { color: #d94f4f; font-size: 1rem; }
+  .wheel-wrap { position: relative; width: min(88vw, 460px); }
+  canvas {
+    display: block; width: 100%; border-radius: 50%;
+    box-shadow: 0 4px 16px rgba(0,0,0,.15); background: #fff;
+  }
+  .pointer {
+    position: absolute; top: -5px; left: 50%;
+    transform: translateX(-50%);
+    width: 0; height: 0;
+    border-left: 14px solid transparent;
+    border-right: 14px solid transparent;
+    border-top: 26px solid #d94f4f;
+    z-index: 6;
+    filter: drop-shadow(0 2px 2px rgba(0,0,0,.2));
+  }
+  #spinBtn {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%,-50%);
+    width: 24%; height: 24%;
+    min-width: 80px; min-height: 80px;
+    border-radius: 50%;
+    border: 3px solid #fff;
+    background: #e74c3c; color: #fff;
+    font-size: 1rem; font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 3px 10px rgba(0,0,0,.3);
+    z-index: 5;
+  }
+  #spinBtn:active { transform: translate(-50%,-50%) scale(.96); }
+  #spinBtn:disabled { background: #cf8d7f; cursor: not-allowed; }
+  .result {
+    margin-top: 1rem; width: min(88vw, 460px);
+    background: #fff; border: 1px solid #e5d9c8;
+    border-radius: 8px; padding: .9rem 2.2rem .9rem 1rem;
+    text-align: center; position: relative;
+  }
+  .res-main { font-size: 1rem; line-height: 1.5; }
+  .res-main b { color: #d94f4f; font-size: 1.2rem; }
+  .res-sub { font-size: .8rem; color: #888; margin-top: .4rem; }
+  .res-close {
+    position: absolute; top: .5rem; right: .7rem;
+    border: none; background: none; font-size: 1rem;
+    color: #aaa; cursor: pointer;
+  }
+  .res-actions { display: flex; gap: .6rem; margin-top: .9rem; }
+  .res-actions button {
+    flex: 1; padding: .55rem 0; font-size: .85rem;
+    border: none; border-radius: 6px; cursor: pointer;
+  }
+  #spinAgain { background: #e74c3c; color: #fff; }
+  #changeProduct { background: #e9e5de; color: #555; }
+  .admin {
+    margin-top: 1.5rem; width: min(88vw, 460px);
+    background: #fff; border: 1px solid #ddd;
+    border-radius: 8px; padding: 1rem 1.1rem;
+  }
+  .admin.collapsed { display: none; }
+  .admin h2 {
+    font-size: .9rem; margin-bottom: .8rem;
+    display: flex; align-items: center; gap: .5rem;
+  }
+  .badge {
+    font-size: .7rem; font-weight: normal;
+    padding: .1rem .5rem; border-radius: 10px;
+    background: #fff3cd; color: #8a6d1a;
+  }
+  .badge.set { background: #d4edda; color: #2f7d4f; }
+  .admin label { display: block; font-size: .8rem; color: #555; margin-bottom: .6rem; }
+  .admin input {
+    display: block; width: 100%; margin-top: .25rem;
+    padding: .5rem .6rem; font-size: .9rem;
+    border: 1px solid #ccc; border-radius: 6px;
+  }
+  .admin-actions { display: flex; gap: .6rem; margin-top: .3rem; }
+  .admin-actions button {
+    flex: 1; padding: .55rem 0; font-size: .85rem;
+    border: none; border-radius: 6px; cursor: pointer;
+  }
+  #saveBtn { background: #2b6cb0; color: #fff; }
+  #resetBtn { background: #e9e5de; color: #555; }
+  .hint { font-size: .7rem; color: #999; margin-top: .6rem; line-height: 1.6; }
+  #toast {
+    position: fixed; left: 50%; bottom: 10vh;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,.75); color: #fff;
+    padding: .5rem 1rem; border-radius: 6px; font-size: .85rem;
+    opacity: 0; pointer-events: none; transition: opacity .3s;
+    z-index: 20; white-space: nowrap;
+  }
+  @media (max-width: 380px) {
+    html { font-size: 14px; }
+    .wheel-wrap { width: 92vw; }
+  }
+</style>
+</head>
+<body>
+
+<h1>肆季文创直播间幸运转盘</h1>
+<div id="productLabel" class="product hidden"></div>
+
+<div class="wheel-wrap">
+  <div class="pointer"></div>
+  <canvas id="wheel"></canvas>
+  <button id="spinBtn">开始抽奖</button>
+</div>
+
+<div id="result" class="result hidden">
+  <button id="resClose" class="res-close">✕</button>
+  <div id="resMain" class="res-main"></div>
+  <div id="resSub" class="res-sub"></div>
+  <div class="res-actions">
+    <button id="spinAgain">再来一次</button>
+    <button id="changeProduct">换产品重置</button>
+  </div>
+</div>
+
+<div id="admin" class="admin">
+  <h2>主播设置 <span id="adminBadge" class="badge">未设置</span></h2>
+  <label>产品名字
+    <input id="pName" type="text" placeholder="例：周天子" />
+  </label>
+  <label>产品价格（元）
+    <input id="pPrice" type="number" min="0" step="0.01" placeholder="例：199" />
+  </label>
+  <label>最大优惠比例（%）
+    <input id="pRate" type="number" min="0" max="100" step="0.5" placeholder="例：5" />
+  </label>
+  <div class="admin-actions">
+    <button id="saveBtn">确认设置并折叠</button>
+    <button id="resetBtn">重置</button>
+  </div>
+  <p class="hint">
+    说明：保存设置后面板自动折叠，直播观众看不到；转盘各档优惠金额按「价格 × 比例」自动计算。
+    需要再修改时，双击页面空白区域即可重新展开。
+  </p>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ---- 转盘分格定义：ratio = 占最大优惠的百分比，weight = 中奖权重 ---- */
+  var SEGMENTS = [
+    { name: '谢谢参与', ratio: 0,    weight: 12 },
+    { name: '5%',       ratio: 0.05, weight: 11 },
+    { name: '10%',      ratio: 0.10, weight: 11 },
+    { name: '15%',      ratio: 0.15, weight: 10 },
+    { name: '20%',      ratio: 0.20, weight: 10 },
+    { name: '30%',      ratio: 0.30, weight: 10 },
+    { name: '40%',      ratio: 0.40, weight: 9 },
+    { name: '50%',      ratio: 0.50, weight: 9 },
+    { name: '60%',      ratio: 0.60, weight: 8 },
+    { name: '70%',      ratio: 0.70, weight: 8 },
+    { name: '80%',      ratio: 0.80, weight: 7 },
+    { name: '谢谢参与', ratio: 0,    weight: 12 },
+    { name: '最高优惠', ratio: 1.0,  weight: 6 }
+  ];
+  var N = SEGMENTS.length, SEG = 360 / N, SIZE = 480;
+
+  /* ---- DOM ---- */
+  var canvas      = document.getElementById('wheel');
+  var spinBtn     = document.getElementById('spinBtn');
+  var resultBox   = document.getElementById('result');
+  var resMain     = document.getElementById('resMain');
+  var resSub      = document.getElementById('resSub');
+  var resClose    = document.getElementById('resClose');
+  var spinAgain   = document.getElementById('spinAgain');
+  var changeProd  = document.getElementById('changeProduct');
+  var adminBox    = document.getElementById('admin');
+  var adminBadge  = document.getElementById('adminBadge');
+  var pName       = document.getElementById('pName');
+  var pPrice      = document.getElementById('pPrice');
+  var pRate       = document.getElementById('pRate');
+  var saveBtn     = document.getElementById('saveBtn');
+  var resetBtn    = document.getElementById('resetBtn');
+  var toastEl     = document.getElementById('toast');
+  var productLabel= document.getElementById('productLabel');
+
+  var WHEEL_VER = '2';   // 每次改版 +1，自动清旧缓存
+
+  var dpr = window.devicePixelRatio || 1;
+  canvas.width  = SIZE * dpr;
+  canvas.height = SIZE * dpr;
+
+  var state    = loadState();
+  var rotation = 0;
+  var spinning = false;
+
+  /* ---- 持久化（带版本号 + 7 天过期自动清理） ---- */
+  function loadState() {
+    try {
+      var ver = localStorage.getItem('wheel_ver');
+      var ts  = parseInt(localStorage.getItem('wheel_ts'), 10) || 0;
+      var age = Date.now() - ts;
+      // 版本不匹配 或 超过 5 小时 → 清空全部缓存
+      if (ver !== WHEEL_VER || age > 5 * 3600 * 1000) {
+        localStorage.removeItem('wheel_cfg');
+        localStorage.setItem('wheel_ver', WHEEL_VER);
+        localStorage.setItem('wheel_ts', String(Date.now()));
+        return { name: '', price: 0, maxRate: 5 };
+      }
+      var s = JSON.parse(localStorage.getItem('wheel_cfg'));
+      if (s && typeof s.maxRate === 'number')
+        return { name: s.name || '', price: s.price || 0, maxRate: s.maxRate || 0 };
+    } catch (e) {}
+    return { name: '', price: 0, maxRate: 5 };
+  }
+  function saveState() {
+    localStorage.setItem('wheel_ver', WHEEL_VER);
+    localStorage.setItem('wheel_ts', String(Date.now()));
+    localStorage.setItem('wheel_cfg', JSON.stringify(state));
+  }
+
+  /* ---- 工具 ---- */
+  function fmt(n) { return String(Math.round(n * 100) / 100); }
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+    });
+  }
+  var toastTimer = null;
+  function flash(msg) {
+    toastEl.textContent = msg;
+    toastEl.style.opacity = 1;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.style.opacity = 0; }, 1800);
+  }
+
+  /* ---- 画转盘 ---- */
+  function drawWheel() {
+    var ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, SIZE, SIZE);
+    var cx = SIZE / 2, cy = SIZE / 2, r = SIZE / 2 - 4;
+
+    for (var i = 0; i < N; i++) {
+      var seg = SEGMENTS[i];
+      var a0 = (i * SEG - 90) * Math.PI / 180;
+      var a1 = ((i + 1) * SEG - 90) * Math.PI / 180;
+
+      /* 扇形 */
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, r, a0, a1);
+      ctx.closePath();
+      ctx.fillStyle = seg.ratio === 0 ? '#e9e9e9' : (i % 2 === 0 ? '#ff9f43' : '#fff4e0');
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      /* 文字 */
+      var mid = (i * SEG + SEG / 2 - 90) * Math.PI / 180;
+      ctx.save();
+      ctx.translate(cx + Math.cos(mid) * r * 0.6, cy + Math.sin(mid) * r * 0.6);
+      ctx.rotate(mid + Math.PI / 2);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      if (seg.ratio === 0) {
+        ctx.fillStyle = '#888';
+        ctx.font = 'bold 17px "PingFang SC", sans-serif';
+        ctx.fillText('谢谢参与', 0, 0);
+      } else if (state.maxRate > 0 && state.price > 0) {
+        var rate   = state.maxRate * seg.ratio;
+        var amount = state.price * rate / 100;
+        ctx.fillStyle = i % 2 === 0 ? '#fff' : '#8a4b0f';
+        ctx.font = 'bold 19px "PingFang SC", sans-serif';
+        ctx.fillText('\u00a5' + fmt(amount), 0, 0);
+      } else {
+        ctx.fillStyle = i % 2 === 0 ? '#fff' : '#8a4b0f';
+        ctx.font = 'bold 15px "PingFang SC", sans-serif';
+        ctx.fillText(seg.ratio === 1 ? '\u6700\u9ad8\u4f18\u60e0' : '\u4f18\u60e0', 0, 0);
+      }
+      ctx.restore();
+    }
+
+    /* 外圈描边 */
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.strokeStyle = '#e0b97a';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+  }
+
+  /* ---- 产品标签 ---- */
+  function updateProductLabel() {
+    if (state.name || state.price > 0) {
+      productLabel.classList.remove('hidden');
+      productLabel.innerHTML = '\u5f53\u524d\u5546\u54c1\uff1a' +
+        (state.name ? esc(state.name) : '\uff08\u672a\u547d\u540d\uff09') +
+        (state.price > 0 ? '　<b>\u00a5' + fmt(state.price) + '</b>' : '');
+    } else {
+      productLabel.classList.add('hidden');
+    }
+  }
+
+  /* ---- 状态标签 ---- */
+  function updateBadge() {
+    var set = adminBox.classList.contains('collapsed');
+    adminBadge.textContent = set ? '\u5df2\u8bbe\u7f6e' : '\u672a\u8bbe\u7f6e';
+    adminBadge.className = 'badge' + (set ? ' set' : '');
+  }
+
+  /* ---- 抽奖 ---- */
+  function pickSegment() {
+    var total = 0, i;
+    for (i = 0; i < N; i++) total += SEGMENTS[i].weight;
+    var rnd = Math.random() * total;
+    for (i = 0; i < N; i++) {
+      rnd -= SEGMENTS[i].weight;
+      if (rnd <= 0) return i;
+    }
+    return N - 1;
+  }
+
+  function spin() {
+    if (spinning) return;
+    if (state.maxRate <= 0) { flash('\u8bf7\u5148\u8bbe\u7f6e\u6700\u5927\u4f18\u60e0\u6bd4\u4f8b'); return; }
+    if (state.price  <= 0) { flash('\u8bf7\u5148\u8bbe\u7f6e\u4ea7\u54c1\u4ef7\u683c'); return; }
+
+    spinning = true;
+    spinBtn.disabled = true;
+    spinBtn.textContent = '\u62bd\u5956\u4e2d';
+    resultBox.classList.add('hidden');
+
+    var target    = pickSegment();
+    var segCenter = target * SEG + SEG / 2;
+    var cur       = ((rotation % 360) + 360) % 360;
+    var delta     = (((360 - segCenter) - cur) % 360 + 360) % 360;
+    var from      = rotation;
+    var to        = rotation + 5 * 360 + delta;
+    var dur       = 4200;
+    var t0        = performance.now();
+
+    function frame(now) {
+      var t = Math.min(1, (now - t0) / dur);
+      var e = 1 - Math.pow(1 - t, 3);           // easeOutCubic
+      rotation = from + (to - from) * e;
+      canvas.style.transform = 'rotate(' + rotation + 'deg)';
+      if (t < 1) {
+        requestAnimationFrame(frame);
+      } else {
+        spinning = false;
+        spinBtn.disabled = false;
+        spinBtn.textContent = '\u5f00\u59cb\u62bd\u5956';
+        showResult(target);
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  function showResult(i) {
+    var seg = SEGMENTS[i];
+    if (seg.ratio === 0) {
+      resMain.textContent = '\u5f88\u9057\u61be\uff0c\u672c\u6b21\u672a\u62bd\u4e2d\u4f18\u60e0';
+      resSub.textContent  = '\u8c22\u8c22\u53c2\u4e0e\uff0c\u4e0b\u628a\u4e00\u5b9a\u4e2d\uff01';
+    } else {
+      var amount     = state.price * state.maxRate / 100 * seg.ratio;
+      var finalPrice = state.price - amount;
+      resMain.innerHTML = '\ud83c\udf89 \u606d\u559c\u83b7\u5f97\u300c' + esc(state.name || '\u5546\u54c1') +
+        '\u300d\u4f18\u60e0 <b>\u00a5' + fmt(amount) + '</b>';
+      resSub.textContent  = '\u5230\u624b\u4ef7\uff1a\u00a5' + fmt(finalPrice);
+    }
+    resultBox.classList.remove('hidden');
+  }
+
+  /* ---- 事件绑定 ---- */
+  spinBtn.addEventListener('click', spin);
+  resClose.addEventListener('click', function () { resultBox.classList.add('hidden'); });
+  spinAgain.addEventListener('click', function () {
+    resultBox.classList.add('hidden');
+    spin();
+  });
+  changeProd.addEventListener('click', function () {
+    resultBox.classList.add('hidden');
+    state = { name: '', price: 0, maxRate: 5 };
+    localStorage.removeItem('wheel_cfg');
+    adminBox.classList.remove('collapsed');
+    applyState();
+    flash('\u5df2\u91cd\u7f6e\uff0c\u8bf7\u8bbe\u7f6e\u65b0\u4ea7\u54c1');
+  });
+
+  saveBtn.addEventListener('click', function () {
+    state.name    = pName.value.trim();
+    state.price   = Math.max(0, parseFloat(pPrice.value) || 0);
+    state.maxRate = Math.min(100, Math.max(0, parseFloat(pRate.value) || 0));
+    saveState();
+    applyState();
+    adminBox.classList.add('collapsed');
+    updateBadge();
+    flash('\u8bbe\u7f6e\u5df2\u4fdd\u5b58\uff0c\u9762\u677f\u5df2\u6298\u53e0');
+  });
+
+  resetBtn.addEventListener('click', function () {
+    state = { name: '', price: 0, maxRate: 5 };
+    localStorage.removeItem('wheel_cfg');
+    adminBox.classList.remove('collapsed');
+    applyState();
+    flash('\u5df2\u91cd\u7f6e\u4e3a\u9ed8\u8ba4\u8bbe\u7f6e');
+  });
+
+  function applyState() {
+    pName.value  = state.name;
+    pPrice.value = state.price  > 0 ? state.price  : '';
+    pRate.value  = state.maxRate > 0 ? state.maxRate : '';
+    drawWheel();
+    updateProductLabel();
+    updateBadge();
+  }
+
+  /* ---- 双击空白区域唤出/折叠设置面板 ---- */
+  document.addEventListener('dblclick', function (e) {
+    var tag = e.target.tagName;
+    if (tag === 'BUTTON' || tag === 'INPUT' || tag === 'CANVAS') return;
+    if (e.target.closest('.result') || e.target.closest('.admin')) return;
+    adminBox.classList.toggle('collapsed');
+    updateBadge();
+    flash(adminBox.classList.contains('collapsed') ? '\u9762\u677f\u5df2\u6298\u53e0' : '\u9762\u677f\u5df2\u5c55\u5f00');
+  });
+
+  /* ---- 初始化 ---- */
+  applyState();
+  if (state.name || state.price > 0) adminBox.classList.add('collapsed');
+  updateBadge();
+})();
+</script>
+</body>
+</html>
